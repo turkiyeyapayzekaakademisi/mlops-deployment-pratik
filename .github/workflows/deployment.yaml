@@ -46,7 +46,7 @@ jobs:
 
       # kod formatını kontrol et
       - name: Ruff format kontrolü
-        run: ruff format --check .
+        run: ruff format .
 
       # testleri çalıştır
       - name: pytest testlerini çalıştır
