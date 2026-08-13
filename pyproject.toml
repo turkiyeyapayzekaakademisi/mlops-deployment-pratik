@@ -1,6 +1,6 @@
 [tool.ruff]
 target-version = "py312" # python 3.12 sürümünü hedefler
-line-length = 88 # kod satır uzunluğunu belirtir
+line-length = 160 # kod satır uzunluğunu belirtir
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B"]
