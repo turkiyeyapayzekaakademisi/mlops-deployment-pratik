@@ -8,6 +8,7 @@ from training.train_model import (
     train_and_save_model,
 )
 
+
 def test_dataset_is_loaded():
     features, target, target_names = load_dataset()
 

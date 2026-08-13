@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from joblib import dump
 from sklearn.datasets import load_iris
 from sklearn.linear_model import LogisticRegression

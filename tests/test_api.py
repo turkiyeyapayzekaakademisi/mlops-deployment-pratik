@@ -67,3 +67,16 @@ def test_predict_validation(client):
     response = client.post("/predict", json=request_data)
 
     assert response.status_code == 422
+
+
+def test_metrics_endpoint(client):
+
+    response = client.get("/health")
+
+    assert response.status_code == 200
+
+    response = client.get("/metrics")
+
+    assert response.status_code == 200
+    assert "api_requests_total" in response.text
+    assert "api_request_duration_seconds" in response.text

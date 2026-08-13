@@ -7,3 +7,4 @@ pydantic
 pytest
 httpx
 ruff
+prometheus-client

@@ -1,9 +1,20 @@
-from pathlib import Path
 import os
+import time
+from pathlib import Path
+
 import pandas as pd
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from joblib import load
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel
+
+from app.metrics import (
+    API_ERRORS,
+    API_REQUEST,
+    API_REQUEST_DURATION,
+    MODEL_PREDICTION_DURATION,
+    MODEL_PREDICTIONS,
+)
 
 # model dosya yolu
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -31,7 +42,65 @@ class PredictionResponse(BaseModel):
 def load_model_bundle():
     return load(MODEL_PATH)
 
+@app.middleware("http")
+async def collect_api_metrics(request: Request, call_next):
 
+    # prometheusun kendi istediğini ölçme
+    if request.url.path == "/metrics":
+        return await call_next(request)
+
+    start_time = time.perf_counter()
+
+    try: 
+        response = await call_next(request)
+        status_code = response.status_code
+    except Exception:
+
+        status_code = 500
+
+        duration = time.perf_counter() - start_time
+
+        API_REQUEST.labels(
+            method=request.method,
+            endpoint=request.url.path,
+            status_code=status_code
+        ).inc() 
+
+        API_ERRORS.labels(
+            method=request.method,
+            endpoint=request.url.path,
+            status_code=status_code
+        ).inc() 
+
+        API_REQUEST_DURATION.labels(
+            method=request.method,
+            endpoint=request.url.path,
+        ).observe(duration)
+
+    duration = time.perf_counter() - start_time
+
+    # istek sayısı arttır
+    API_REQUEST.labels(
+        method=request.method,
+        endpoint=request.url.path,
+        status_code=status_code
+    ).inc() 
+
+    API_REQUEST_DURATION.labels(
+        method=request.method,
+        endpoint=request.url.path,
+    ).observe(duration)
+
+    # 4XX VE 5XX cevapları hata olarak say
+    if status_code >= 400:
+        API_ERRORS.labels(
+        method=request.method,
+        endpoint=request.url.path,
+        status_code=status_code
+    ).inc() 
+
+    return response
+    
 @app.get("/")
 def root():
     return {"message": "iris prediction api"}
@@ -48,6 +117,12 @@ def health():
         "accuracy": model_bundle["accuracy"],
     }
 
+@app.get("/metrics", include_in_schema=False)
+def metrics():
+    return Response(
+        content = generate_latest(),
+        media_type=CONTENT_TYPE_LATEST
+    )
 
 @app.post("/predict", response_model=PredictionResponse)
 def predict(data: IrisInput):
@@ -64,11 +139,25 @@ def predict(data: IrisInput):
         columns=feature_names,
     )
 
+    prediction_start = time.perf_counter()
+
     # tahmin yapma
     prediction = int(model.predict(input_data)[0])
 
+    prediction_duration = time.perf_counter() - prediction_start
+
+    class_name = target_names[prediction]
+
+    # tahmin süresini kaydet
+    MODEL_PREDICTION_DURATION.observe(prediction_duration)
+
+    # tahmin edilen sınıfı say
+    MODEL_PREDICTIONS.labels(
+        class_name = class_name
+    ).inc()
+    
     return {
         "prediction": prediction,
-        "class_name": target_names[prediction],
+        "class_name": class_name,
         "model_version": model_bundle["model_version"],
     }
