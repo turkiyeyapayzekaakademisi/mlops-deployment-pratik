@@ -1,0 +1,76 @@
+name: Deployment Pipeline
+
+on:
+  push: 
+    branches:
+      - main
+  
+  pull_request:
+    branches:
+      - main
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/mlops-deployment-api
+
+permission:
+  contents: read
+  packages: write
+
+jobs:
+  deployment:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # repo kodlarının runner'a alınması
+      - name: repo kodunu alınması
+        uses: actions/checkout@v6
+
+      # python ortamını hazırla
+      - name: python 3.12 kurulması
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      # proje bağımlılıklawrının kurulması
+      - name: Python bağımlılıklarını kurulması
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # kod kalitesinin kontrol edilmesi
+      - name: Ruff lint kontrol
+        run: ruff check .
+
+      # kod formatını kontrol et
+      - name: Ruff format kontrolü
+        run: ruff format --check .
+
+      # testleri çalıştır
+      - name: pytest testlerini çalıştır
+        run: python -m pytest
+
+      # docker image oluştur
+      - name: Docker image oluştur
+        run: docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} -t ${{ env.IMAGE_NAME }}:latest .
+
+      # GHCR ye giriş yap
+      - name: GHCR ye giriş
+        if: github.event_name == 'push'
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u "${{ github.actor }}" --password-stdin
+        
+      # docker imagelarını ghcr ye gönder
+      - name: docker image'ı ghcr'ye gönder
+        if: github.event_name == 'push'
+        run: |
+          docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.IMAGE_NAME }}:latest
+
+      # yeni image ile render deployment başlat
+      - name: render deployement başlat
+        if: github.event_name == 'push'
+        run: curl --fail --show-error --silent --get --data-urlencode "imgURL=${{ env.IMAGE_NAME }}:${{ github.sha }}" "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+        
+        
