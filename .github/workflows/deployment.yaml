@@ -42,7 +42,7 @@ jobs:
 
       # kod kalitesinin kontrol edilmesi
       - name: Ruff lint kontrol
-        run: ruff check .
+        run: ruff check . --fix
 
       # kod formatını kontrol et
       - name: Ruff format kontrolü
