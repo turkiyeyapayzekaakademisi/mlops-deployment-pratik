@@ -107,14 +107,14 @@ jobs:
       - name: Challenger modeli eğit
 
         # Random Forest Challenger modelini eğitir
-        run: python -m retraining.train_challenger
+        run: python -m training.train_challenger
 
 
       # Champion ve Challenger arasındaki kararı uygular
       - name: Challenger modelini değerlendir
 
         # Challenger daha başarılıysa Champion modelini günceller
-        run: python -m retraining.promote_challenger
+        run: python -m training.promote_challenger
 
 
       # Yeni Champion modeli içeren Docker image'ı oluşturur
