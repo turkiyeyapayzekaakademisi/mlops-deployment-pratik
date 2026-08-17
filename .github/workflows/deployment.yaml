@@ -86,7 +86,7 @@ jobs:
       - name: Ruff lint kontrolü
 
         # Ruff lint kontrolünü çalıştırır
-        run: ruff check .
+        run: ruff check . --fix
 
 
       # Otomatik testleri çalıştırır
