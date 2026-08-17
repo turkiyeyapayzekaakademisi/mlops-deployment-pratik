@@ -1,76 +1,151 @@
-name: Deployment Pipeline
+# GitHub Actions ekranında görünecek pipeline adını belirler
+name: Automatic Model Update and Deployment
 
+
+# Pipeline'ın ne zaman çalışacağını belirler
 on:
-  push: 
-    branches:
-      - main
-  
-  pull_request:
+
+  # main branch'e push yapıldığında pipeline'ı çalıştırır
+  push:
+
+    # Yalnızca main branch'i takip eder
     branches:
       - main
 
+
+# Workflow içerisinde ortak kullanılacak değişkenleri tanımlar
 env:
+
+  # Docker image'ının gönderileceği registry'yi belirtir
   REGISTRY: ghcr.io
+
+  # Mevcut Render servisimizin kullandığı Docker image adını belirtir
   IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/mlops-deployment-api
 
+
+# GitHub Actions'ın kullanacağı repository izinlerini tanımlar
 permissions:
+
+  # Repository kodlarını okuyabilmesini sağlar
   contents: read
+
+  # Docker image'ını GHCR'ye gönderebilmesini sağlar
   packages: write
 
+
+# Pipeline içerisinde çalışacak job'ları tanımlar
 jobs:
-  deployment:
+
+  # Model güncelleme ve deployment job'ını oluşturur
+  model-update:
+
+    # Job'ın Ubuntu üzerinde çalışmasını sağlar
     runs-on: ubuntu-latest
 
+    # Job içerisinde sırayla çalışacak adımları tanımlar
     steps:
 
-      # repo kodlarının runner'a alınması
-      - name: repo kodunu alınması
+
+      # Repository kodlarını GitHub runner'a indirir
+      - name: Repository kodunu al
+
+        # GitHub repository kodlarını checkout eder
         uses: actions/checkout@v6
 
-      # python ortamını hazırla
-      - name: python 3.12 kurulması
+
+      # Python ortamını oluşturur
+      - name: Python 3.12 kurulumu
+
+        # GitHub runner üzerinde Python kurar
         uses: actions/setup-python@v7
+
+        # Python ayarlarını tanımlar
         with:
+
+          # Kullanılacak Python sürümünü belirler
           python-version: "3.12"
+
+          # Pip paketlerini cache'ler
           cache: "pip"
 
-      # proje bağımlılıklawrının kurulması
-      - name: Python bağımlılıklarını kurulması
+
+      # Python bağımlılıklarını yükler
+      - name: Python bağımlılıklarını kur
+
+        # Birden fazla terminal komutu çalıştırır
         run: |
+
+          # Pip'i günceller
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
 
-      # kod kalitesinin kontrol edilmesi
-      - name: Ruff lint kontrol
-        run: ruff check . --fix
+          # Proje ve development bağımlılıklarını kurar
+          pip install -r requirements-dev.txt
 
-      # kod formatını kontrol et
-      - name: Ruff format kontrolü
-        run: ruff format .
 
-      # testleri çalıştır
-      - name: pytest testlerini çalıştır
+      # Kod kalitesini kontrol eder
+      - name: Ruff lint kontrolü
+
+        # Ruff lint kontrolünü çalıştırır
+        run: ruff check .
+
+
+      # Otomatik testleri çalıştırır
+      - name: Pytest testlerini çalıştır
+
+        # Projedeki testleri çalıştırır
         run: python -m pytest
 
-      # docker image oluştur
+
+      # Mevcut Champion modeli oluşturur
+      - name: Champion modeli oluştur
+
+        # Logistic Regression tabanlı mevcut modeli oluşturur
+        run: python -m training.train_model
+
+
+      # Yeni Challenger modeli oluşturur
+      - name: Challenger modeli eğit
+
+        # Random Forest Challenger modelini eğitir
+        run: python -m retraining.train_challenger
+
+
+      # Champion ve Challenger arasındaki kararı uygular
+      - name: Challenger modelini değerlendir
+
+        # Challenger daha başarılıysa Champion modelini günceller
+        run: python -m retraining.promote_challenger
+
+
+      # Yeni Champion modeli içeren Docker image'ı oluşturur
       - name: Docker image oluştur
+
+        # Image'a hem Git commit SHA hem latest tag'i verir
         run: docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} -t ${{ env.IMAGE_NAME }}:latest .
 
-      # GHCR ye giriş yap
-      - name: GHCR ye giriş
-        if: github.event_name == 'push'
+
+      # GitHub Container Registry'ye giriş yapar
+      - name: GHCR giriş
+
+        # GitHub tarafından oluşturulan token ile GHCR authentication yapar
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u "${{ github.actor }}" --password-stdin
-        
-      # docker imagelarını ghcr ye gönder
-      - name: docker image'ı ghcr'ye gönder
-        if: github.event_name == 'push'
+
+
+      # Docker image'larını GHCR'ye gönderir
+      - name: Docker image'ı GHCR'ye gönder
+
+        # Birden fazla Docker push komutunu çalıştırır
         run: |
+
+          # Commit SHA tag'ine sahip image'ı GHCR'ye gönderir
           docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+          # latest tag'ine sahip image'ı GHCR'ye gönderir
           docker push ${{ env.IMAGE_NAME }}:latest
 
-      # yeni image ile render deployment başlat
-      - name: render deployement başlat
-        if: github.event_name == 'push'
+
+      # Yeni modeli Render üzerinde canlıya alır
+      - name: Render deployment başlat
+
+        # Render Deploy Hook'u çağırır ve ilgili SHA image'ını deploy eder
         run: curl --fail --show-error --silent --get --data-urlencode "imgURL=${{ env.IMAGE_NAME }}:${{ github.sha }}" "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
-        
-        

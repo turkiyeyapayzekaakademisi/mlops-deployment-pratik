@@ -16,14 +16,11 @@ COPY requirements.txt .
 # python bağımlılıklarını kur
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Model eğitim kodlarını kopyala
-COPY training ./training
-
 # Fastapi uygulamasını kopyala
 COPY app ./app
 
-# modeli docker build sırasında eğit
-RUN python -m training.train_model
+# seçilmiş champion model dosyasını container içerisinde ki artifact klasörüne taşır
+COPY artifacts/iris_model.joblib ./artifacts/iris_model.joblib
 
 # fastapi portunu belirt
 EXPOSE 8000
